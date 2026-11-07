@@ -1,0 +1,172 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default-deny all documents as global safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(ownerUid) {
+      return isSignedIn() && request.auth.uid == ownerUid;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Connectivity test route
+    match /test/{testId} {
+      allow get: if true;
+    }
+
+    // Validation for Incomes
+    function isValidIncome(data) {
+      return data.keys().hasAll(['id', 'description', 'amount', 'date', 'userId', 'createdAt', 'ownerUid']) &&
+        data.keys().hasOnly(['id', 'description', 'amount', 'date', 'userId', 'category', 'receiptImage', 'createdAt', 'ownerUid']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.description is string && data.description.size() <= 100 &&
+        data.amount is number &&
+        data.date is string && data.date.size() <= 10 &&
+        (data.userId == 'Mafran' || data.userId == 'Naiely') &&
+        data.createdAt is number &&
+        data.ownerUid is string && data.ownerUid == request.auth.uid &&
+        (!('category' in data) || (data.category is string && data.category.size() <= 50)) &&
+        (!('receiptImage' in data) || (data.receiptImage is string && data.receiptImage.size() <= 500000));
+    }
+
+    match /incomes/{incomeId} {
+      allow get: if isOwner(resource.data.ownerUid);
+      allow list: if isSignedIn() && resource.data.ownerUid == request.auth.uid;
+      allow create: if isVerified() && isValidId(incomeId) && isValidIncome(incoming()) && incoming().id == incomeId;
+      allow update: if isVerified() && isValidId(incomeId) && isOwner(existing().ownerUid) && incoming().ownerUid == existing().ownerUid && incoming().id == existing().id && isValidIncome(incoming());
+      allow delete: if isVerified() && isValidId(incomeId) && isOwner(existing().ownerUid);
+    }
+
+    // Validation for Expenses
+    function isValidExpense(data) {
+      return data.keys().hasAll(['id', 'description', 'amount', 'date', 'userId', 'category', 'type', 'paymentMethod', 'createdAt', 'ownerUid']) &&
+        data.keys().hasOnly(['id', 'description', 'amount', 'date', 'userId', 'category', 'type', 'paymentMethod', 'dueDay', 'durationMonths', 'fixedEndDate', 'barcodeOrPix', 'isNextMonthInvoice', 'createdAt', 'ownerUid']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.description is string && data.description.size() <= 100 &&
+        data.amount is number &&
+        data.date is string && data.date.size() <= 10 &&
+        (data.userId == 'Mafran' || data.userId == 'Naiely') &&
+        (data.category == 'Família' || data.category == 'Individual') &&
+        (data.type == 'Fixo' || data.type == 'Variável') &&
+        (data.paymentMethod == 'Pix' || data.paymentMethod == 'Dinheiro' || data.paymentMethod == 'Débito' || data.paymentMethod == 'Crédito') &&
+        data.createdAt is number &&
+        data.ownerUid is string && data.ownerUid == request.auth.uid &&
+        (!('dueDay' in data) || data.dueDay is number) &&
+        (!('durationMonths' in data) || (data.durationMonths is string && data.durationMonths.size() <= 20) || data.durationMonths is number) &&
+        (!('fixedEndDate' in data) || (data.fixedEndDate is string && data.fixedEndDate.size() <= 10)) &&
+        (!('barcodeOrPix' in data) || (data.barcodeOrPix is string && data.barcodeOrPix.size() <= 300)) &&
+        (!('isNextMonthInvoice' in data) || data.isNextMonthInvoice is bool);
+    }
+
+    match /expenses/{expenseId} {
+      allow get: if isOwner(resource.data.ownerUid);
+      allow list: if isSignedIn() && resource.data.ownerUid == request.auth.uid;
+      allow create: if isVerified() && isValidId(expenseId) && isValidExpense(incoming()) && incoming().id == expenseId;
+      allow update: if isVerified() && isValidId(expenseId) && isOwner(existing().ownerUid) && incoming().ownerUid == existing().ownerUid && incoming().id == existing().id && isValidExpense(incoming());
+      allow delete: if isVerified() && isValidId(expenseId) && isOwner(existing().ownerUid);
+    }
+
+    // Validation for Bills
+    function isValidBill(data) {
+      return data.keys().hasAll(['id', 'name', 'amount', 'dueDate', 'isPaid', 'category', 'ownerUid']) &&
+        data.keys().hasOnly(['id', 'name', 'amount', 'dueDate', 'barcodeOrPix', 'isPaid', 'paidAt', 'category', 'userId', 'isInstallment', 'installmentCurrent', 'installmentTotal', 'installmentAmount', 'originalInstallmentId', 'createdAt', 'ownerUid']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.name is string && data.name.size() <= 100 &&
+        data.amount is number &&
+        data.dueDate is string && data.dueDate.size() <= 10 &&
+        data.isPaid is bool &&
+        (data.category == 'Família' || data.category == 'Individual') &&
+        data.ownerUid is string && data.ownerUid == request.auth.uid &&
+        (!('paidAt' in data) || (data.paidAt is string && data.paidAt.size() <= 30)) &&
+        (!('userId' in data) || (data.userId == 'Mafran' || data.userId == 'Naiely')) &&
+        (!('barcodeOrPix' in data) || (data.barcodeOrPix is string && data.barcodeOrPix.size() <= 300)) &&
+        (!('isInstallment' in data) || data.isInstallment is bool) &&
+        (!('installmentCurrent' in data) || data.installmentCurrent is number) &&
+        (!('installmentTotal' in data) || data.installmentTotal is number) &&
+        (!('installmentAmount' in data) || data.installmentAmount is number) &&
+        (!('originalInstallmentId' in data) || (data.originalInstallmentId is string && data.originalInstallmentId.size() <= 128)) &&
+        (!('createdAt' in data) || data.createdAt is number);
+    }
+
+    match /bills/{billId} {
+      allow get: if isOwner(resource.data.ownerUid);
+      allow list: if isSignedIn() && resource.data.ownerUid == request.auth.uid;
+      allow create: if isVerified() && isValidId(billId) && isValidBill(incoming()) && incoming().id == billId;
+      allow update: if isVerified() && isValidId(billId) && isOwner(existing().ownerUid) && incoming().ownerUid == existing().ownerUid && incoming().id == existing().id && isValidBill(incoming());
+      allow delete: if isVerified() && isValidId(billId) && isOwner(existing().ownerUid);
+    }
+
+    // Validation for Market Priorities
+    function isValidPriority(data) {
+      return data.keys().hasAll(['id', 'name', 'category', 'isCompleted', 'addedBy', 'month', 'ownerUid']) &&
+        data.keys().hasOnly(['id', 'name', 'category', 'quantity', 'isCompleted', 'estimatedPrice', 'addedBy', 'month', 'createdAt', 'ownerUid']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.name is string && data.name.size() <= 100 &&
+        data.category is string && data.category.size() <= 50 &&
+        data.isCompleted is bool &&
+        (data.addedBy == 'Mafran' || data.addedBy == 'Naiely') &&
+        data.month is string && data.month.size() <= 7 &&
+        data.ownerUid is string && data.ownerUid == request.auth.uid &&
+        (!('quantity' in data) || (data.quantity is string && data.quantity.size() <= 30)) &&
+        (!('estimatedPrice' in data) || data.estimatedPrice is number) &&
+        (!('createdAt' in data) || data.createdAt is number);
+    }
+
+    match /marketPriorities/{priorityId} {
+      allow get: if isOwner(resource.data.ownerUid);
+      allow list: if isSignedIn() && resource.data.ownerUid == request.auth.uid;
+      allow create: if isVerified() && isValidId(priorityId) && isValidPriority(incoming()) && incoming().id == priorityId;
+      allow update: if isVerified() && isValidId(priorityId) && isOwner(existing().ownerUid) && incoming().ownerUid == existing().ownerUid && incoming().id == existing().id && isValidPriority(incoming());
+      allow delete: if isVerified() && isValidId(priorityId) && isOwner(existing().ownerUid);
+    }
+
+    // Validation for Market Trips
+    function isValidTrip(data) {
+      return data.keys().hasAll(['id', 'date', 'month', 'supermarketName', 'totalAmount', 'items', 'createdAt', 'ownerUid']) &&
+        data.keys().hasOnly(['id', 'date', 'month', 'supermarketName', 'totalAmount', 'items', 'notes', 'syncedToFinance', 'createdAt', 'ownerUid']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.date is string && data.date.size() <= 10 &&
+        data.month is string && data.month.size() <= 7 &&
+        data.supermarketName is string && data.supermarketName.size() <= 100 &&
+        data.totalAmount is number &&
+        data.items is list && data.items.size() <= 200 &&
+        data.createdAt is number &&
+        data.ownerUid is string && data.ownerUid == request.auth.uid &&
+        (!('notes' in data) || (data.notes is string && data.notes.size() <= 500)) &&
+        (!('syncedToFinance' in data) || data.syncedToFinance is bool);
+    }
+
+    match /marketTrips/{tripId} {
+      allow get: if isOwner(resource.data.ownerUid);
+      allow list: if isSignedIn() && resource.data.ownerUid == request.auth.uid;
+      allow create: if isVerified() && isValidId(tripId) && isValidTrip(incoming()) && incoming().id == tripId;
+      allow update: if isVerified() && isValidId(tripId) && isOwner(existing().ownerUid) && incoming().ownerUid == existing().ownerUid && incoming().id == existing().id && isValidTrip(incoming());
+      allow delete: if isVerified() && isValidId(tripId) && isOwner(existing().ownerUid);
+    }
+
+  }
+}

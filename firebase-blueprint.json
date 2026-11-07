@@ -1,0 +1,138 @@
+{
+  "entities": {
+    "Income": {
+      "title": "Income",
+      "description": "Registro de receita ou renda familiar com regras de privacidade",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "description": { "type": "string", "maxLength": 100 },
+        "amount": { "type": "number" },
+        "date": { "type": "string", "maxLength": 10 },
+        "userId": { "type": "string", "enum": ["Mafran", "Naiely"] },
+        "category": { "type": "string", "maxLength": 50 },
+        "receiptImage": { "type": "string", "maxLength": 500000 },
+        "createdAt": { "type": "number" },
+        "ownerUid": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["id", "description", "amount", "date", "userId", "createdAt", "ownerUid"]
+    },
+    "Expense": {
+      "title": "Expense",
+      "description": "Despesa fixa ou variável familiar/individual",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "description": { "type": "string", "maxLength": 100 },
+        "amount": { "type": "number" },
+        "date": { "type": "string", "maxLength": 10 },
+        "userId": { "type": "string", "enum": ["Mafran", "Naiely"] },
+        "category": { "type": "string", "enum": ["Família", "Individual"] },
+        "type": { "type": "string", "enum": ["Fixo", "Variável"] },
+        "paymentMethod": { "type": "string", "enum": ["Pix", "Dinheiro", "Débito", "Crédito"] },
+        "dueDay": { "type": "number" },
+        "durationMonths": { "type": "string", "maxLength": 20 },
+        "fixedEndDate": { "type": "string", "maxLength": 10 },
+        "barcodeOrPix": { "type": "string", "maxLength": 300 },
+        "isNextMonthInvoice": { "type": "boolean" },
+        "createdAt": { "type": "number" },
+        "ownerUid": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["id", "description", "amount", "date", "userId", "category", "type", "paymentMethod", "createdAt", "ownerUid"]
+    },
+    "Bill": {
+      "title": "Bill",
+      "description": "Contas a pagar e boletos da família",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 100 },
+        "amount": { "type": "number" },
+        "dueDate": { "type": "string", "maxLength": 10 },
+        "barcodeOrPix": { "type": "string", "maxLength": 300 },
+        "isPaid": { "type": "boolean" },
+        "paidAt": { "type": "string", "maxLength": 30 },
+        "category": { "type": "string", "enum": ["Família", "Individual"] },
+        "userId": { "type": "string", "enum": ["Mafran", "Naiely"] },
+        "isInstallment": { "type": "boolean" },
+        "installmentCurrent": { "type": "number" },
+        "installmentTotal": { "type": "number" },
+        "installmentAmount": { "type": "number" },
+        "originalInstallmentId": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "number" },
+        "ownerUid": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["id", "name", "amount", "dueDate", "isPaid", "category", "ownerUid"]
+    },
+    "MarketPriorityItem": {
+      "title": "MarketPriorityItem",
+      "description": "Item prioritário da lista de compras do mês",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 100 },
+        "category": { "type": "string", "maxLength": 50 },
+        "quantity": { "type": "string", "maxLength": 30 },
+        "isCompleted": { "type": "boolean" },
+        "estimatedPrice": { "type": "number" },
+        "addedBy": { "type": "string", "enum": ["Mafran", "Naiely"] },
+        "month": { "type": "string", "maxLength": 7 },
+        "createdAt": { "type": "number" },
+        "ownerUid": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["id", "name", "category", "isCompleted", "addedBy", "month", "ownerUid"]
+    },
+    "MarketTrip": {
+      "title": "MarketTrip",
+      "description": "Registro de ida ao mercado com itens e valor total",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "date": { "type": "string", "maxLength": 10 },
+        "month": { "type": "string", "maxLength": 7 },
+        "supermarketName": { "type": "string", "maxLength": 100 },
+        "totalAmount": { "type": "number" },
+        "items": { "type": "array" },
+        "notes": { "type": "string", "maxLength": 500 },
+        "syncedToFinance": { "type": "boolean" },
+        "createdAt": { "type": "number" },
+        "ownerUid": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["id", "date", "month", "supermarketName", "totalAmount", "items", "createdAt", "ownerUid"]
+    },
+    "Test": {
+      "title": "Test",
+      "description": "Entidade de teste de conectividade com Firestore",
+      "type": "object",
+      "properties": {
+        "status": { "type": "string", "maxLength": 20 }
+      }
+    }
+  },
+  "firestore": {
+    "/incomes/{incomeId}": {
+      "schema": "Income",
+      "description": "Coleção de rendas e salários com controle de visibilidade"
+    },
+    "/expenses/{expenseId}": {
+      "schema": "Expense",
+      "description": "Coleção de despesas familiares e individuais"
+    },
+    "/bills/{billId}": {
+      "schema": "Bill",
+      "description": "Coleção de contas a pagar, boletos e parcelas"
+    },
+    "/marketPriorities/{priorityId}": {
+      "schema": "MarketPriorityItem",
+      "description": "Itens da lista de compras do supermercado"
+    },
+    "/marketTrips/{tripId}": {
+      "schema": "MarketTrip",
+      "description": "Histórico de compras e recibos de supermercado"
+    },
+    "/test/{testId}": {
+      "schema": "Test",
+      "description": "Verificação de conectividade do cliente"
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Souza - Gestão Familiar",
+  "description": "Aplicativo mobile de controle financeiro familiar e gestão de compras de mercado com privacidade por usuário.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
