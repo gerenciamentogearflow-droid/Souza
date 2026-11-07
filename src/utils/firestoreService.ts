@@ -5,7 +5,6 @@ import {
   deleteDoc,
   onSnapshot,
   query,
-  where,
   Unsubscribe,
   getDocs,
 } from 'firebase/firestore';
@@ -24,8 +23,12 @@ import {
   saveMarketTrips,
 } from './storage';
 
+const FAMILY_ID = 'souza';
+
+// ==========================================
 // Incomes Firestore Operations
-export async function saveIncomeDoc(income: Income, ownerUid: string): Promise<void> {
+// ==========================================
+export async function saveIncomeDoc(income: Income): Promise<void> {
   const path = `incomes/${income.id}`;
   try {
     const payload = {
@@ -35,9 +38,10 @@ export async function saveIncomeDoc(income: Income, ownerUid: string): Promise<v
       date: income.date,
       userId: income.userId,
       createdAt: income.createdAt || Date.now(),
-      ownerUid,
+      familyId: FAMILY_ID,
       ...(income.category ? { category: income.category } : {}),
       ...(income.receiptImage ? { receiptImage: income.receiptImage } : {}),
+      ...(income.ownerUid ? { ownerUid: income.ownerUid } : {}),
     };
     await setDoc(doc(db, 'incomes', income.id), payload);
   } catch (error) {
@@ -55,11 +59,11 @@ export async function deleteIncomeDoc(incomeId: string): Promise<void> {
 }
 
 export function subscribeIncomes(
-  ownerUid: string,
-  onUpdate: (incomes: Income[]) => void
+  onUpdate: (incomes: Income[]) => void,
+  onError?: (err: unknown) => void
 ): Unsubscribe {
   const path = 'incomes';
-  const q = query(collection(db, path), where('ownerUid', '==', ownerUid));
+  const q = query(collection(db, path));
 
   return onSnapshot(
     q,
@@ -70,27 +74,31 @@ export function subscribeIncomes(
         items.push({
           id: data.id,
           description: data.description,
-          amount: data.amount,
+          amount: Number(data.amount),
           date: data.date,
           userId: data.userId,
           category: data.category,
           receiptImage: data.receiptImage,
           createdAt: data.createdAt,
+          ownerUid: data.ownerUid,
         });
       });
-      // Ordena por data decrescente
       items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       onUpdate(items);
-      saveIncomes(items); // Sincroniza cache local
+      saveIncomes(items);
     },
     (error) => {
+      console.warn('Incomes onSnapshot error:', error);
+      if (onError) onError(error);
       handleFirestoreError(error, OperationType.GET, path);
     }
   );
 }
 
+// ==========================================
 // Expenses Firestore Operations
-export async function saveExpenseDoc(expense: Expense, ownerUid: string): Promise<void> {
+// ==========================================
+export async function saveExpenseDoc(expense: Expense): Promise<void> {
   const path = `expenses/${expense.id}`;
   try {
     const payload = {
@@ -103,12 +111,13 @@ export async function saveExpenseDoc(expense: Expense, ownerUid: string): Promis
       type: expense.type,
       paymentMethod: expense.paymentMethod,
       createdAt: expense.createdAt || Date.now(),
-      ownerUid,
+      familyId: FAMILY_ID,
       ...(expense.dueDay !== undefined ? { dueDay: Number(expense.dueDay) } : {}),
       ...(expense.durationMonths !== undefined ? { durationMonths: String(expense.durationMonths) } : {}),
       ...(expense.fixedEndDate ? { fixedEndDate: expense.fixedEndDate } : {}),
       ...(expense.barcodeOrPix ? { barcodeOrPix: expense.barcodeOrPix } : {}),
       ...(expense.isNextMonthInvoice !== undefined ? { isNextMonthInvoice: expense.isNextMonthInvoice } : {}),
+      ...(expense.ownerUid ? { ownerUid: expense.ownerUid } : {}),
     };
     await setDoc(doc(db, 'expenses', expense.id), payload);
   } catch (error) {
@@ -126,11 +135,11 @@ export async function deleteExpenseDoc(expenseId: string): Promise<void> {
 }
 
 export function subscribeExpenses(
-  ownerUid: string,
-  onUpdate: (expenses: Expense[]) => void
+  onUpdate: (expenses: Expense[]) => void,
+  onError?: (err: unknown) => void
 ): Unsubscribe {
   const path = 'expenses';
-  const q = query(collection(db, path), where('ownerUid', '==', ownerUid));
+  const q = query(collection(db, path));
 
   return onSnapshot(
     q,
@@ -141,7 +150,7 @@ export function subscribeExpenses(
         items.push({
           id: data.id,
           description: data.description,
-          amount: data.amount,
+          amount: Number(data.amount),
           date: data.date,
           userId: data.userId,
           category: data.category,
@@ -153,20 +162,25 @@ export function subscribeExpenses(
           barcodeOrPix: data.barcodeOrPix,
           isNextMonthInvoice: data.isNextMonthInvoice,
           createdAt: data.createdAt,
+          ownerUid: data.ownerUid,
         });
       });
       items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       onUpdate(items);
-      saveExpenses(items); // Sincroniza cache local
+      saveExpenses(items);
     },
     (error) => {
+      console.warn('Expenses onSnapshot error:', error);
+      if (onError) onError(error);
       handleFirestoreError(error, OperationType.GET, path);
     }
   );
 }
 
+// ==========================================
 // Bills Firestore Operations
-export async function saveBillDoc(bill: Bill, ownerUid: string): Promise<void> {
+// ==========================================
+export async function saveBillDoc(bill: Bill): Promise<void> {
   const path = `bills/${bill.id}`;
   try {
     const payload = {
@@ -176,7 +190,7 @@ export async function saveBillDoc(bill: Bill, ownerUid: string): Promise<void> {
       dueDate: bill.dueDate,
       isPaid: Boolean(bill.isPaid),
       category: bill.category,
-      ownerUid,
+      familyId: FAMILY_ID,
       ...(bill.paidAt ? { paidAt: bill.paidAt } : {}),
       ...(bill.userId ? { userId: bill.userId } : {}),
       ...(bill.barcodeOrPix ? { barcodeOrPix: bill.barcodeOrPix } : {}),
@@ -186,6 +200,7 @@ export async function saveBillDoc(bill: Bill, ownerUid: string): Promise<void> {
       ...(bill.installmentAmount !== undefined ? { installmentAmount: Number(bill.installmentAmount) } : {}),
       ...(bill.originalInstallmentId ? { originalInstallmentId: bill.originalInstallmentId } : {}),
       ...(bill.createdAt ? { createdAt: bill.createdAt } : { createdAt: Date.now() }),
+      ...(bill.ownerUid ? { ownerUid: bill.ownerUid } : {}),
     };
     await setDoc(doc(db, 'bills', bill.id), payload);
   } catch (error) {
@@ -203,11 +218,11 @@ export async function deleteBillDoc(billId: string): Promise<void> {
 }
 
 export function subscribeBills(
-  ownerUid: string,
-  onUpdate: (bills: Bill[]) => void
+  onUpdate: (bills: Bill[]) => void,
+  onError?: (err: unknown) => void
 ): Unsubscribe {
   const path = 'bills';
-  const q = query(collection(db, path), where('ownerUid', '==', ownerUid));
+  const q = query(collection(db, path));
 
   return onSnapshot(
     q,
@@ -218,10 +233,10 @@ export function subscribeBills(
         items.push({
           id: data.id,
           name: data.name,
-          amount: data.amount,
+          amount: Number(data.amount),
           dueDate: data.dueDate,
           barcodeOrPix: data.barcodeOrPix,
-          isPaid: data.isPaid,
+          isPaid: Boolean(data.isPaid),
           paidAt: data.paidAt,
           category: data.category,
           userId: data.userId,
@@ -231,23 +246,25 @@ export function subscribeBills(
           installmentAmount: data.installmentAmount,
           originalInstallmentId: data.originalInstallmentId,
           createdAt: data.createdAt,
+          ownerUid: data.ownerUid,
         });
       });
       items.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
       onUpdate(items);
-      saveBills(items); // Sincroniza cache local
+      saveBills(items);
     },
     (error) => {
+      console.warn('Bills onSnapshot error:', error);
+      if (onError) onError(error);
       handleFirestoreError(error, OperationType.GET, path);
     }
   );
 }
 
+// ==========================================
 // Market Priorities Firestore Operations
-export async function savePriorityDoc(
-  item: MarketPriorityItem,
-  ownerUid: string
-): Promise<void> {
+// ==========================================
+export async function savePriorityDoc(item: MarketPriorityItem): Promise<void> {
   const path = `marketPriorities/${item.id}`;
   try {
     const payload = {
@@ -257,10 +274,11 @@ export async function savePriorityDoc(
       isCompleted: Boolean(item.isCompleted),
       addedBy: item.addedBy,
       month: item.month,
-      ownerUid,
+      familyId: FAMILY_ID,
       ...(item.quantity ? { quantity: item.quantity } : {}),
       ...(item.estimatedPrice !== undefined ? { estimatedPrice: Number(item.estimatedPrice) } : {}),
       ...(item.createdAt ? { createdAt: item.createdAt } : { createdAt: Date.now() }),
+      ...(item.ownerUid ? { ownerUid: item.ownerUid } : {}),
     };
     await setDoc(doc(db, 'marketPriorities', item.id), payload);
   } catch (error) {
@@ -278,11 +296,11 @@ export async function deletePriorityDoc(itemId: string): Promise<void> {
 }
 
 export function subscribeMarketPriorities(
-  ownerUid: string,
-  onUpdate: (items: MarketPriorityItem[]) => void
+  onUpdate: (items: MarketPriorityItem[]) => void,
+  onError?: (err: unknown) => void
 ): Unsubscribe {
   const path = 'marketPriorities';
-  const q = query(collection(db, path), where('ownerUid', '==', ownerUid));
+  const q = query(collection(db, path));
 
   return onSnapshot(
     q,
@@ -295,24 +313,29 @@ export function subscribeMarketPriorities(
           name: data.name,
           category: data.category,
           quantity: data.quantity,
-          isCompleted: data.isCompleted,
-          estimatedPrice: data.estimatedPrice,
+          isCompleted: Boolean(data.isCompleted),
+          estimatedPrice: data.estimatedPrice !== undefined ? Number(data.estimatedPrice) : undefined,
           addedBy: data.addedBy,
           month: data.month,
           createdAt: data.createdAt,
+          ownerUid: data.ownerUid,
         });
       });
       onUpdate(items);
-      saveMarketPriorities(items); // Sincroniza cache local
+      saveMarketPriorities(items);
     },
     (error) => {
+      console.warn('Priorities onSnapshot error:', error);
+      if (onError) onError(error);
       handleFirestoreError(error, OperationType.GET, path);
     }
   );
 }
 
+// ==========================================
 // Market Trips Firestore Operations
-export async function saveTripDoc(trip: MarketTrip, ownerUid: string): Promise<void> {
+// ==========================================
+export async function saveTripDoc(trip: MarketTrip): Promise<void> {
   const path = `marketTrips/${trip.id}`;
   try {
     const payload = {
@@ -323,9 +346,10 @@ export async function saveTripDoc(trip: MarketTrip, ownerUid: string): Promise<v
       totalAmount: Number(trip.totalAmount),
       items: trip.items || [],
       createdAt: trip.createdAt || Date.now(),
-      ownerUid,
+      familyId: FAMILY_ID,
       ...(trip.notes ? { notes: trip.notes } : {}),
       ...(trip.syncedToFinance !== undefined ? { syncedToFinance: trip.syncedToFinance } : {}),
+      ...(trip.ownerUid ? { ownerUid: trip.ownerUid } : {}),
     };
     await setDoc(doc(db, 'marketTrips', trip.id), payload);
   } catch (error) {
@@ -343,11 +367,11 @@ export async function deleteTripDoc(tripId: string): Promise<void> {
 }
 
 export function subscribeMarketTrips(
-  ownerUid: string,
-  onUpdate: (trips: MarketTrip[]) => void
+  onUpdate: (trips: MarketTrip[]) => void,
+  onError?: (err: unknown) => void
 ): Unsubscribe {
   const path = 'marketTrips';
-  const q = query(collection(db, path), where('ownerUid', '==', ownerUid));
+  const q = query(collection(db, path));
 
   return onSnapshot(
     q,
@@ -360,41 +384,59 @@ export function subscribeMarketTrips(
           date: data.date,
           month: data.month,
           supermarketName: data.supermarketName,
-          totalAmount: data.totalAmount,
+          totalAmount: Number(data.totalAmount),
           items: data.items || [],
           notes: data.notes,
           syncedToFinance: data.syncedToFinance,
           createdAt: data.createdAt,
+          ownerUid: data.ownerUid,
         });
       });
       items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       onUpdate(items);
-      saveMarketTrips(items); // Sincroniza cache local
+      saveMarketTrips(items);
     },
     (error) => {
+      console.warn('Trips onSnapshot error:', error);
+      if (onError) onError(error);
       handleFirestoreError(error, OperationType.GET, path);
     }
   );
 }
 
-// Sincronização automática de coleções com detecção de adições, modificações e exclusões
+// ==========================================
+// Limpar todas as contas e registros da nuvem (Firestore)
+// ==========================================
+export async function clearAllFirestoreDocs(): Promise<void> {
+  const collections = ['expenses', 'bills', 'incomes', 'marketPriorities', 'marketTrips'];
+  for (const colName of collections) {
+    try {
+      const snap = await getDocs(collection(db, colName));
+      const deletePromises = snap.docs.map((docSnap) => deleteDoc(doc(db, colName, docSnap.id)));
+      await Promise.all(deletePromises);
+    } catch (err) {
+      console.error(`Erro ao limpar coleção ${colName}:`, err);
+    }
+  }
+}
+
+// ==========================================
+// Collection Synchronization
+// ==========================================
 export async function syncIncomesCollection(
   newIncomes: Income[],
-  previousIncomes: Income[],
-  ownerUid: string
+  previousIncomes: Income[]
 ): Promise<void> {
   const newMap = new Map(newIncomes.map((item) => [item.id, item]));
   const prevMap = new Map(previousIncomes.map((item) => [item.id, item]));
 
-  // Adições e atualizações
   for (const item of newIncomes) {
     const prev = prevMap.get(item.id);
     if (!prev || JSON.stringify(prev) !== JSON.stringify(item)) {
-      await saveIncomeDoc(item, ownerUid);
+      await saveIncomeDoc(item);
     }
   }
 
-  // Exclusões
   for (const prev of previousIncomes) {
     if (!newMap.has(prev.id)) {
       await deleteIncomeDoc(prev.id);
@@ -404,8 +446,7 @@ export async function syncIncomesCollection(
 
 export async function syncExpensesCollection(
   newExpenses: Expense[],
-  previousExpenses: Expense[],
-  ownerUid: string
+  previousExpenses: Expense[]
 ): Promise<void> {
   const newMap = new Map(newExpenses.map((item) => [item.id, item]));
   const prevMap = new Map(previousExpenses.map((item) => [item.id, item]));
@@ -413,7 +454,7 @@ export async function syncExpensesCollection(
   for (const item of newExpenses) {
     const prev = prevMap.get(item.id);
     if (!prev || JSON.stringify(prev) !== JSON.stringify(item)) {
-      await saveExpenseDoc(item, ownerUid);
+      await saveExpenseDoc(item);
     }
   }
 
@@ -426,8 +467,7 @@ export async function syncExpensesCollection(
 
 export async function syncBillsCollection(
   newBills: Bill[],
-  previousBills: Bill[],
-  ownerUid: string
+  previousBills: Bill[]
 ): Promise<void> {
   const newMap = new Map(newBills.map((item) => [item.id, item]));
   const prevMap = new Map(previousBills.map((item) => [item.id, item]));
@@ -435,7 +475,7 @@ export async function syncBillsCollection(
   for (const item of newBills) {
     const prev = prevMap.get(item.id);
     if (!prev || JSON.stringify(prev) !== JSON.stringify(item)) {
-      await saveBillDoc(item, ownerUid);
+      await saveBillDoc(item);
     }
   }
 
@@ -448,8 +488,7 @@ export async function syncBillsCollection(
 
 export async function syncPrioritiesCollection(
   newPriorities: MarketPriorityItem[],
-  previousPriorities: MarketPriorityItem[],
-  ownerUid: string
+  previousPriorities: MarketPriorityItem[]
 ): Promise<void> {
   const newMap = new Map(newPriorities.map((item) => [item.id, item]));
   const prevMap = new Map(previousPriorities.map((item) => [item.id, item]));
@@ -457,7 +496,7 @@ export async function syncPrioritiesCollection(
   for (const item of newPriorities) {
     const prev = prevMap.get(item.id);
     if (!prev || JSON.stringify(prev) !== JSON.stringify(item)) {
-      await savePriorityDoc(item, ownerUid);
+      await savePriorityDoc(item);
     }
   }
 
@@ -470,8 +509,7 @@ export async function syncPrioritiesCollection(
 
 export async function syncTripsCollection(
   newTrips: MarketTrip[],
-  previousTrips: MarketTrip[],
-  ownerUid: string
+  previousTrips: MarketTrip[]
 ): Promise<void> {
   const newMap = new Map(newTrips.map((item) => [item.id, item]));
   const prevMap = new Map(previousTrips.map((item) => [item.id, item]));
@@ -479,7 +517,7 @@ export async function syncTripsCollection(
   for (const item of newTrips) {
     const prev = prevMap.get(item.id);
     if (!prev || JSON.stringify(prev) !== JSON.stringify(item)) {
-      await saveTripDoc(item, ownerUid);
+      await saveTripDoc(item);
     }
   }
 
@@ -490,9 +528,22 @@ export async function syncTripsCollection(
   }
 }
 
-// Sincronização inicial: envia qualquer dado que já existia no localStorage para o Firestore
-export async function syncLocalStorageToFirestore(ownerUid: string): Promise<number> {
-  let count = 0;
+// Sincronização de todos os dados locais para a nuvem Firestore
+export async function syncLocalStorageToFirestore(): Promise<{
+  incomes: number;
+  expenses: number;
+  bills: number;
+  priorities: number;
+  trips: number;
+}> {
+  const result = {
+    incomes: 0,
+    expenses: 0,
+    bills: 0,
+    priorities: 0,
+    trips: 0,
+  };
+
   try {
     const localIncomes = getIncomes();
     const localExpenses = getExpenses();
@@ -501,28 +552,143 @@ export async function syncLocalStorageToFirestore(ownerUid: string): Promise<num
     const localTrips = getMarketTrips();
 
     for (const inc of localIncomes) {
-      await saveIncomeDoc(inc, ownerUid);
-      count++;
+      await saveIncomeDoc(inc);
+      result.incomes++;
     }
     for (const exp of localExpenses) {
-      await saveExpenseDoc(exp, ownerUid);
-      count++;
+      await saveExpenseDoc(exp);
+      result.expenses++;
     }
     for (const b of localBills) {
-      await saveBillDoc(b, ownerUid);
-      count++;
+      await saveBillDoc(b);
+      result.bills++;
     }
     for (const p of localPriorities) {
-      await savePriorityDoc(p, ownerUid);
-      count++;
+      await savePriorityDoc(p);
+      result.priorities++;
     }
     for (const t of localTrips) {
-      await saveTripDoc(t, ownerUid);
-      count++;
+      await saveTripDoc(t);
+      result.trips++;
     }
   } catch (err) {
     console.error('Erro ao sincronizar dados locais para o Firestore:', err);
   }
-  return count;
+  return result;
 }
 
+// Carregamento inicial direto de todas as coleções do Firestore
+export async function fetchRemoteCollectionsOnce(): Promise<{
+  incomes: Income[];
+  expenses: Expense[];
+  bills: Bill[];
+  priorities: MarketPriorityItem[];
+  trips: MarketTrip[];
+}> {
+  const result = {
+    incomes: [] as Income[],
+    expenses: [] as Expense[],
+    bills: [] as Bill[],
+    priorities: [] as MarketPriorityItem[],
+    trips: [] as MarketTrip[],
+  };
+
+  try {
+    const [incSnap, expSnap, billSnap, prioSnap, tripSnap] = await Promise.all([
+      getDocs(collection(db, 'incomes')),
+      getDocs(collection(db, 'expenses')),
+      getDocs(collection(db, 'bills')),
+      getDocs(collection(db, 'marketPriorities')),
+      getDocs(collection(db, 'marketTrips')),
+    ]);
+
+    incSnap.forEach((docSnap) => {
+      const d = docSnap.data();
+      result.incomes.push({
+        id: d.id,
+        description: d.description,
+        amount: Number(d.amount),
+        date: d.date,
+        userId: d.userId,
+        category: d.category,
+        receiptImage: d.receiptImage,
+        createdAt: d.createdAt,
+      });
+    });
+
+    expSnap.forEach((docSnap) => {
+      const d = docSnap.data();
+      result.expenses.push({
+        id: d.id,
+        description: d.description,
+        amount: Number(d.amount),
+        date: d.date,
+        userId: d.userId,
+        category: d.category,
+        type: d.type,
+        paymentMethod: d.paymentMethod,
+        dueDay: d.dueDay,
+        durationMonths: d.durationMonths === 'indefinite' ? 'indefinite' : (d.durationMonths ? Number(d.durationMonths) : undefined),
+        fixedEndDate: d.fixedEndDate,
+        barcodeOrPix: d.barcodeOrPix,
+        isNextMonthInvoice: d.isNextMonthInvoice,
+        createdAt: d.createdAt,
+      });
+    });
+
+    billSnap.forEach((docSnap) => {
+      const d = docSnap.data();
+      result.bills.push({
+        id: d.id,
+        name: d.name,
+        amount: Number(d.amount),
+        dueDate: d.dueDate,
+        barcodeOrPix: d.barcodeOrPix,
+        isPaid: Boolean(d.isPaid),
+        paidAt: d.paidAt,
+        category: d.category,
+        userId: d.userId,
+        isInstallment: d.isInstallment,
+        installmentCurrent: d.installmentCurrent,
+        installmentTotal: d.installmentTotal,
+        installmentAmount: d.installmentAmount,
+        originalInstallmentId: d.originalInstallmentId,
+        createdAt: d.createdAt,
+      });
+    });
+
+    prioSnap.forEach((docSnap) => {
+      const d = docSnap.data();
+      result.priorities.push({
+        id: d.id,
+        name: d.name,
+        category: d.category,
+        quantity: d.quantity,
+        isCompleted: Boolean(d.isCompleted),
+        estimatedPrice: d.estimatedPrice !== undefined ? Number(d.estimatedPrice) : undefined,
+        addedBy: d.addedBy,
+        month: d.month,
+        createdAt: d.createdAt,
+      });
+    });
+
+    tripSnap.forEach((docSnap) => {
+      const d = docSnap.data();
+      result.trips.push({
+        id: d.id,
+        date: d.date,
+        month: d.month,
+        supermarketName: d.supermarketName,
+        totalAmount: Number(d.totalAmount),
+        items: d.items || [],
+        notes: d.notes,
+        syncedToFinance: d.syncedToFinance,
+        createdAt: d.createdAt,
+      });
+    });
+  } catch (err) {
+    console.error('Erro ao buscar dados remotos do Firestore:', err);
+  }
+
+  return result;
+}

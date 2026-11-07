@@ -1,18 +1,18 @@
 import React, { useState } from 'react';
 import { UserName } from '../types';
 import { FIXED_USERS } from '../utils/storage';
-import { LogOut, RefreshCw, UserCheck, Shield, ChevronDown, Cloud, Database, CheckCircle2, Loader2, ArrowUpRight } from 'lucide-react';
-import { User as FirebaseUser } from 'firebase/auth';
+import { LogOut, RefreshCw, UserCheck, ChevronDown, Cloud, CloudCheck, Loader2, Database, UploadCloud, RotateCcw } from 'lucide-react';
 
 interface TopBarProps {
   currentUser: UserName;
   onSwitchUser: (newUser: UserName) => void;
   onLogout: () => void;
   onResetData: () => void;
-  firebaseUser?: FirebaseUser | null;
-  onConnectCloud?: () => void;
-  onSyncNow?: () => Promise<void>;
+  isCloudConnected?: boolean;
+  onForceSyncToCloud?: () => Promise<void>;
+  onOpenCacheRecovery?: () => void;
   isSyncing?: boolean;
+  syncFeedback?: string | null;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
@@ -20,24 +20,15 @@ export const TopBar: React.FC<TopBarProps> = ({
   onSwitchUser,
   onLogout,
   onResetData,
-  firebaseUser,
-  onConnectCloud,
-  onSyncNow,
+  isCloudConnected = true,
+  onForceSyncToCloud,
+  onOpenCacheRecovery,
   isSyncing = false,
+  syncFeedback,
 }) => {
   const [showMenu, setShowMenu] = useState(false);
-  const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
   const otherUser: UserName = currentUser === 'Mafran' ? 'Naiely' : 'Mafran';
   const userProfile = FIXED_USERS[currentUser];
-
-  const handleManualSync = async () => {
-    if (onSyncNow) {
-      setSyncFeedback(null);
-      await onSyncNow();
-      setSyncFeedback('Dados salvos no banco de dados!');
-      setTimeout(() => setSyncFeedback(null), 3000);
-    }
-  };
 
   return (
     <>
@@ -58,15 +49,29 @@ export const TopBar: React.FC<TopBarProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Status do Banco Automático */}
+            {/* Status do Banco na Nuvem */}
             <button
               onClick={() => setShowMenu(true)}
-              title="Banco de dados automático ativo"
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] font-semibold hover:bg-emerald-500/20 transition-all cursor-pointer"
+              title="Banco de dados na nuvem Firestore conectado"
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-semibold transition-all cursor-pointer ${
+                isCloudConnected
+                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'
+                  : 'bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20'
+              }`}
             >
-              <Database className="w-3 h-3 text-emerald-400" />
-              <span className="hidden xs:inline">Banco Automático</span>
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              {isSyncing ? (
+                <Loader2 className="w-3 h-3 text-emerald-400 animate-spin" />
+              ) : (
+                <CloudCheck className="w-3.5 h-3.5 text-emerald-400" />
+              )}
+              <span className="hidden xs:inline">
+                {isSyncing ? 'Sincronizando...' : 'Nuvem Conectada'}
+              </span>
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  isCloudConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
+                }`}
+              />
             </button>
 
             {/* User Status / Menu Trigger */}
@@ -95,7 +100,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                     className="fixed inset-0 z-40"
                     onClick={() => setShowMenu(false)}
                   />
-                  <div className="absolute right-0 mt-2 w-72 bg-[#111624] border border-slate-800 rounded-2xl shadow-2xl p-2.5 z-50 animate-fade-in space-y-2">
+                  <div className="absolute right-0 mt-2 w-80 bg-[#111624] border border-slate-800 rounded-2xl shadow-2xl p-3 z-50 animate-fade-in space-y-2.5">
                     {/* Perfil */}
                     <div className="p-2.5 bg-[#0a0d14] rounded-xl border border-slate-800/80">
                       <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Perfil Familiar</p>
@@ -106,46 +111,66 @@ export const TopBar: React.FC<TopBarProps> = ({
                       <p className="text-[11px] text-slate-400 mt-0.5">{userProfile.role}</p>
                     </div>
 
-                    {/* Cartão de Status do Banco de Dados Automático */}
-                    <div className="p-2.5 bg-[#0e1422] rounded-xl border border-slate-800/90 space-y-2">
+                    {/* Cartão do Banco na Nuvem */}
+                    <div className="p-3 bg-[#0e1422] rounded-xl border border-slate-800/90 space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                          <Database className="w-3 h-3 text-emerald-400" />
-                          Banco Automático
+                        <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                          <Cloud className="w-3.5 h-3.5 text-emerald-400" />
+                          Banco de Dados na Nuvem
                         </span>
-                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                          Sincronizado
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          Firestore Ativo
                         </span>
                       </div>
 
-                      <p className="text-[11px] text-slate-300">
-                        Todos os seus dados são salvos de forma automática e segura no banco em tempo real.
+                      <p className="text-[11px] text-slate-300 leading-relaxed">
+                        Seus dados são salvos na nuvem em tempo real e sincronizados entre o Render, celulares e computadores.
                       </p>
 
-                      <button
-                        onClick={handleManualSync}
-                        disabled={isSyncing}
-                        className="w-full py-1.5 px-2.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
-                      >
-                        {isSyncing ? (
-                          <>
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            <span>Sincronizando...</span>
-                          </>
-                        ) : (
-                          <>
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            <span>Verificar Sincronização</span>
-                          </>
-                        )}
-                      </button>
+                      {onForceSyncToCloud && (
+                        <button
+                          onClick={onForceSyncToCloud}
+                          disabled={isSyncing}
+                          className="w-full py-2 px-3 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 font-semibold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
+                        >
+                          {isSyncing ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              <span>Enviando para a Nuvem...</span>
+                            </>
+                          ) : (
+                            <>
+                              <UploadCloud className="w-3.5 h-3.5" />
+                              <span>Enviar dados deste aparelho para a Nuvem</span>
+                            </>
+                          )}
+                        </button>
+                      )}
 
                       {syncFeedback && (
-                        <p className="text-[11px] text-emerald-400 font-medium text-center animate-fade-in">
+                        <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-[11px] text-emerald-300 font-medium text-center animate-fade-in">
                           {syncFeedback}
-                        </p>
+                        </div>
                       )}
                     </div>
+
+                    {/* Botão de Recuperação de Cache do Aparelho */}
+                    {onOpenCacheRecovery && (
+                      <button
+                        onClick={() => {
+                          setShowMenu(false);
+                          onOpenCacheRecovery();
+                        }}
+                        className="w-full flex items-center gap-2.5 p-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 text-xs font-semibold transition-colors cursor-pointer text-left border border-emerald-500/25"
+                      >
+                        <RotateCcw className="w-4 h-4 text-emerald-400 shrink-0" />
+                        <div>
+                          <div>Recuperar do Cache do Aparelho</div>
+                          <div className="text-[10px] text-slate-400 font-normal">Buscar lançamentos salvos no navegador</div>
+                        </div>
+                      </button>
+                    )}
 
                     {/* Switch to other user */}
                     <button
@@ -159,18 +184,18 @@ export const TopBar: React.FC<TopBarProps> = ({
                       <span>Alternar para {otherUser}</span>
                     </button>
 
-                    {/* Reset test data */}
+                    {/* Reset all accounts & data */}
                     <button
                       onClick={() => {
-                        if (confirm('Deseja apagar todos os lançamentos locais e zerar o aplicativo?')) {
+                        if (confirm('Deseja realmente apagar todas as contas, receitas e registros cadastrados no app e no banco de dados na nuvem para recomeçar do zero?')) {
                           onResetData();
                           setShowMenu(false);
                         }
                       }}
-                      className="w-full flex items-center gap-2.5 p-2 rounded-xl hover:bg-slate-800/60 text-slate-400 hover:text-slate-200 text-xs font-medium transition-colors cursor-pointer text-left"
+                      className="w-full flex items-center gap-2.5 p-2 rounded-xl hover:bg-rose-500/10 text-rose-400 hover:text-rose-300 text-xs font-semibold transition-colors cursor-pointer text-left"
                     >
-                      <RefreshCw className="w-4 h-4 text-amber-400" />
-                      <span>Zerar lançamentos locais</span>
+                      <RefreshCw className="w-4 h-4 text-rose-400" />
+                      <span>Apagar todas as contas (Zerar Tudo)</span>
                     </button>
 
                     <div className="border-t border-slate-800/80 pt-1" />

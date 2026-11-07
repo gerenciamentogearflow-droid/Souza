@@ -13,9 +13,10 @@
         "category": { "type": "string", "maxLength": 50 },
         "receiptImage": { "type": "string", "maxLength": 500000 },
         "createdAt": { "type": "number" },
+        "familyId": { "type": "string", "maxLength": 50 },
         "ownerUid": { "type": "string", "maxLength": 128 }
       },
-      "required": ["id", "description", "amount", "date", "userId", "createdAt", "ownerUid"]
+      "required": ["id", "description", "amount", "date", "userId", "createdAt"]
     },
     "Expense": {
       "title": "Expense",
@@ -36,9 +37,10 @@
         "barcodeOrPix": { "type": "string", "maxLength": 300 },
         "isNextMonthInvoice": { "type": "boolean" },
         "createdAt": { "type": "number" },
+        "familyId": { "type": "string", "maxLength": 50 },
         "ownerUid": { "type": "string", "maxLength": 128 }
       },
-      "required": ["id", "description", "amount", "date", "userId", "category", "type", "paymentMethod", "createdAt", "ownerUid"]
+      "required": ["id", "description", "amount", "date", "userId", "category", "type", "paymentMethod", "createdAt"]
     },
     "Bill": {
       "title": "Bill",
@@ -60,9 +62,10 @@
         "installmentAmount": { "type": "number" },
         "originalInstallmentId": { "type": "string", "maxLength": 128 },
         "createdAt": { "type": "number" },
+        "familyId": { "type": "string", "maxLength": 50 },
         "ownerUid": { "type": "string", "maxLength": 128 }
       },
-      "required": ["id", "name", "amount", "dueDate", "isPaid", "category", "ownerUid"]
+      "required": ["id", "name", "amount", "dueDate", "isPaid", "category"]
     },
     "MarketPriorityItem": {
       "title": "MarketPriorityItem",
@@ -78,9 +81,10 @@
         "addedBy": { "type": "string", "enum": ["Mafran", "Naiely"] },
         "month": { "type": "string", "maxLength": 7 },
         "createdAt": { "type": "number" },
+        "familyId": { "type": "string", "maxLength": 50 },
         "ownerUid": { "type": "string", "maxLength": 128 }
       },
-      "required": ["id", "name", "category", "isCompleted", "addedBy", "month", "ownerUid"]
+      "required": ["id", "name", "category", "isCompleted", "addedBy", "month"]
     },
     "MarketTrip": {
       "title": "MarketTrip",
@@ -96,9 +100,10 @@
         "notes": { "type": "string", "maxLength": 500 },
         "syncedToFinance": { "type": "boolean" },
         "createdAt": { "type": "number" },
+        "familyId": { "type": "string", "maxLength": 50 },
         "ownerUid": { "type": "string", "maxLength": 128 }
       },
-      "required": ["id", "date", "month", "supermarketName", "totalAmount", "items", "createdAt", "ownerUid"]
+      "required": ["id", "date", "month", "supermarketName", "totalAmount", "items", "createdAt"]
     },
     "Test": {
       "title": "Test",

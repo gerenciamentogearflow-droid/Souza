@@ -7,6 +7,8 @@ const STORAGE_KEYS = {
   BILLS: 'souza_bills_v2',
   PRIORITIES: 'souza_market_priorities_v2',
   MARKET_TRIPS: 'souza_market_trips_v2',
+  EXPENSES_BACKUP: 'souza_expenses_backup',
+  BILLS_BACKUP: 'souza_bills_backup',
 };
 
 export const FIXED_USERS = {
@@ -60,16 +62,13 @@ export function setStoredUser(user: UserName | null): void {
   }
 }
 
-// REGRA CRÍTICA DE PRIVACIDADE:
-// - O que Mafran lançar, SOMENTE Mafran pode ver. Naiely NÃO pode ver.
-// - O que Naiely lançar, Mafran PODE ver (e Naiely vê o seu próprio).
 export function filterIncomesByPrivacy(incomes: Income[], viewer: UserName): Income[] {
   return incomes.filter((item) => {
     if (item.userId === 'Mafran') {
       return viewer === 'Mafran';
     }
     if (item.userId === 'Naiely') {
-      return true; // Mafran vê e Naiely vê
+      return true;
     }
     return false;
   });
@@ -79,7 +78,8 @@ function getFromStorage<T>(key: string, defaultValue: T): T {
   try {
     const item = localStorage.getItem(key);
     if (!item) return defaultValue;
-    return JSON.parse(item) as T;
+    const parsed = JSON.parse(item) as T;
+    return parsed;
   } catch (e) {
     console.warn(`Error parsing ${key} from storage:`, e);
     return defaultValue;
@@ -108,6 +108,9 @@ export function getExpenses(): Expense[] {
 
 export function saveExpenses(expenses: Expense[]): void {
   setToStorage(STORAGE_KEYS.EXPENSES, expenses);
+  if (expenses.length > 0) {
+    setToStorage(STORAGE_KEYS.EXPENSES_BACKUP, expenses);
+  }
 }
 
 export function getBills(): Bill[] {
@@ -116,6 +119,9 @@ export function getBills(): Bill[] {
 
 export function saveBills(bills: Bill[]): void {
   setToStorage(STORAGE_KEYS.BILLS, bills);
+  if (bills.length > 0) {
+    setToStorage(STORAGE_KEYS.BILLS_BACKUP, bills);
+  }
 }
 
 export function getMarketPriorities(): MarketPriorityItem[] {
@@ -134,21 +140,69 @@ export function saveMarketTrips(trips: MarketTrip[]): void {
   setToStorage(STORAGE_KEYS.MARKET_TRIPS, trips);
 }
 
-// Limpa qualquer dado fake ou cache antigo da versão v1
-export function purgeOldMockData(): void {
-  try {
-    const oldKeys = [
-      'souza_initialized_v1',
-      'souza_incomes_v1',
-      'souza_expenses_v1',
-      'souza_bills_v1',
-      'souza_market_priorities_v1',
-      'souza_market_trips_v1',
-    ];
-    oldKeys.forEach((key) => localStorage.removeItem(key));
-  } catch (err) {
-    console.error('Error purging old mock data:', err);
+export interface DiscoveredCacheBackup {
+  storageKey: string;
+  source: 'localStorage' | 'sessionStorage';
+  itemCount: number;
+  totalAmount: number;
+  sampleDescriptions: string[];
+  data: any[];
+}
+
+// Varre todas as chaves do navegador em busca de edições salvas anteriormente
+export function scanBrowserStorageForBackups(): DiscoveredCacheBackup[] {
+  const discovered: DiscoveredCacheBackup[] = [];
+
+  const checkStorage = (storage: Storage, source: 'localStorage' | 'sessionStorage') => {
+    try {
+      for (let i = 0; i < storage.length; i++) {
+        const key = storage.key(i);
+        if (!key) continue;
+        const val = storage.getItem(key);
+        if (!val || (!val.startsWith('[') && !val.startsWith('{'))) continue;
+
+        try {
+          const parsed = JSON.parse(val);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            // Verifica se parece com lista de despesas ou contas
+            const isExpensesOrBills = parsed.some(
+              (item) => item && typeof item === 'object' && ('amount' in item || 'description' in item || 'name' in item)
+            );
+
+            if (isExpensesOrBills) {
+              const totalAmount = parsed.reduce(
+                (sum, item) => sum + (Number(item.amount) || 0),
+                0
+              );
+              const sampleDescriptions = parsed
+                .slice(0, 5)
+                .map((item) => item.description || item.name || 'Sem nome');
+
+              discovered.push({
+                storageKey: key,
+                source,
+                itemCount: parsed.length,
+                totalAmount,
+                sampleDescriptions,
+                data: parsed,
+              });
+            }
+          }
+        } catch {
+          // Ignora se não for JSON válido
+        }
+      }
+    } catch (e) {
+      console.warn('Erro ao escanear armazenamento local:', e);
+    }
+  };
+
+  if (typeof window !== 'undefined') {
+    if (window.localStorage) checkStorage(window.localStorage, 'localStorage');
+    if (window.sessionStorage) checkStorage(window.sessionStorage, 'sessionStorage');
   }
+
+  return discovered;
 }
 
 export function clearAllData(): void {
@@ -157,5 +211,12 @@ export function clearAllData(): void {
   saveBills([]);
   saveMarketPriorities([]);
   saveMarketTrips([]);
-  purgeOldMockData();
+  try {
+    localStorage.removeItem(STORAGE_KEYS.EXPENSES_BACKUP);
+    localStorage.removeItem(STORAGE_KEYS.BILLS_BACKUP);
+  } catch {}
+}
+
+export function purgeOldMockData(): void {
+  // Mantém backups seguros no navegador
 }

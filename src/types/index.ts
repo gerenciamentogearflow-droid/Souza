@@ -23,6 +23,8 @@ export interface Income {
   category?: string;
   receiptImage?: string; // Base64 data URL
   createdAt: number;
+  familyId?: string;
+  ownerUid?: string;
 }
 
 export interface Expense {
@@ -41,6 +43,8 @@ export interface Expense {
   barcodeOrPix?: string; // Dados para pagamento (Código de barras, boleto ou Pix)
   isNextMonthInvoice?: boolean; // Se for crédito, cai na fatura do mês seguinte
   createdAt: number;
+  familyId?: string;
+  ownerUid?: string;
 }
 
 export interface Bill {
@@ -59,6 +63,8 @@ export interface Bill {
   installmentAmount?: number; // Ex: 243.00
   originalInstallmentId?: string;
   createdAt?: number;
+  familyId?: string;
+  ownerUid?: string;
 }
 
 export interface MarketPriorityItem {
@@ -71,6 +77,8 @@ export interface MarketPriorityItem {
   addedBy: UserName;
   month: string; // YYYY-MM
   createdAt?: number;
+  familyId?: string;
+  ownerUid?: string;
 }
 
 export interface CartLiveItem {
@@ -96,4 +104,6 @@ export interface MarketTrip {
   notes?: string;
   syncedToFinance?: boolean;
   createdAt: number;
+  familyId?: string;
+  ownerUid?: string;
 }

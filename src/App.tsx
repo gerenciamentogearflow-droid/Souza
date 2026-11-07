@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Bill, Expense, Income, MarketPriorityItem, MarketTrip, UserName } from './types';
 import {
   getBills,
@@ -23,7 +23,8 @@ import { HomeScreen } from './components/HomeScreen';
 import { FinancialModule } from './components/financial/FinancialModule';
 import { MarketModule } from './components/market/MarketModule';
 import { BottomNav, MainNavTab } from './components/BottomNav';
-import { auth, loginWithGoogle, onAuthStateChanged, type User } from './utils/firebase';
+import { CacheRecoveryModal } from './components/CacheRecoveryModal';
+import { testConnection } from './utils/firebase';
 import {
   subscribeIncomes,
   subscribeExpenses,
@@ -36,19 +37,20 @@ import {
   syncIncomesCollection,
   syncPrioritiesCollection,
   syncTripsCollection,
+  clearAllFirestoreDocs,
 } from './utils/firestoreService';
-import { Cloud, Database, CheckCircle2, AlertTriangle, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<UserName | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
 
-  // Firebase Auth State
-  const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
-  const [isConnectingCloud, setIsConnectingCloud] = useState(false);
+  // Cloud Database Status
+  const [isCloudConnected, setIsCloudConnected] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
 
-  // App data states
+  // App data states (in-memory + cached in localStorage + synchronized with Firestore)
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [bills, setBills] = useState<Bill[]>([]);
   const [incomes, setIncomes] = useState<Income[]>([]);
@@ -63,7 +65,7 @@ export default function App() {
   // Month
   const [selectedMonth, setSelectedMonth] = useState<string>(getCurrentMonthStr());
 
-  // Carrega dados iniciais e sessão do localStorage (salvamento automático local)
+  // 1. Carregamento inicial do cache local e verificação de sessão
   useEffect(() => {
     purgeOldMockData();
     loadAllLocalData();
@@ -72,54 +74,77 @@ export default function App() {
       setCurrentUser(stored);
     }
     setIsInitialized(true);
-
-    // Observador de Autenticação Firebase
-    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
-      setFirebaseUser(user);
-      if (user) {
-        try {
-          await syncLocalStorageToFirestore(user.uid);
-        } catch (e) {
-          console.error('Falha ao sincronizar dados:', e);
-        }
-      }
-    });
-
-    return () => unsubscribeAuth();
   }, []);
 
-  // Assinatura em tempo real no Firestore quando o usuário está autenticado
+  // 2. Conexão em tempo real com o Firestore na Nuvem (ativo para todos os dispositivos)
   useEffect(() => {
-    if (!firebaseUser) return;
+    let isSubscribed = true;
 
-    const unsubIncomes = subscribeIncomes(firebaseUser.uid, (remoteIncomes) => {
-      setIncomes(remoteIncomes);
-    });
+    // Testa conectividade inicial com o Firestore
+    testConnection()
+      .then(() => {
+        if (isSubscribed) setIsCloudConnected(true);
+      })
+      .catch((err) => {
+        console.warn('Conexão offline ou falha:', err);
+        if (isSubscribed) setIsCloudConnected(false);
+      });
 
-    const unsubExpenses = subscribeExpenses(firebaseUser.uid, (remoteExpenses) => {
-      setExpenses(remoteExpenses);
-    });
+    // Inicia assinaturas em tempo real em todas as coleções familiares
+    const unsubIncomes = subscribeIncomes(
+      (remoteIncomes) => {
+        if (!isSubscribed) return;
+        setIncomes(remoteIncomes);
+        setIsCloudConnected(true);
+      },
+      () => setIsCloudConnected(false)
+    );
 
-    const unsubBills = subscribeBills(firebaseUser.uid, (remoteBills) => {
-      setBills(remoteBills);
-    });
+    const unsubExpenses = subscribeExpenses(
+      (remoteExpenses) => {
+        if (!isSubscribed) return;
+        setExpenses(remoteExpenses);
+        setIsCloudConnected(true);
+      },
+      () => setIsCloudConnected(false)
+    );
 
-    const unsubPriorities = subscribeMarketPriorities(firebaseUser.uid, (remotePriorities) => {
-      setMarketPriorities(remotePriorities);
-    });
+    const unsubBills = subscribeBills(
+      (remoteBills) => {
+        if (!isSubscribed) return;
+        setBills(remoteBills);
+        setIsCloudConnected(true);
+      },
+      () => setIsCloudConnected(false)
+    );
 
-    const unsubTrips = subscribeMarketTrips(firebaseUser.uid, (remoteTrips) => {
-      setMarketTrips(remoteTrips);
-    });
+    const unsubPriorities = subscribeMarketPriorities(
+      (remotePriorities) => {
+        if (!isSubscribed) return;
+        setMarketPriorities(remotePriorities);
+        setIsCloudConnected(true);
+      },
+      () => setIsCloudConnected(false)
+    );
+
+    const unsubTrips = subscribeMarketTrips(
+      (remoteTrips) => {
+        if (!isSubscribed) return;
+        setMarketTrips(remoteTrips);
+        setIsCloudConnected(true);
+      },
+      () => setIsCloudConnected(false)
+    );
 
     return () => {
+      isSubscribed = false;
       unsubIncomes();
       unsubExpenses();
       unsubBills();
       unsubPriorities();
       unsubTrips();
     };
-  }, [firebaseUser]);
+  }, []);
 
   const loadAllLocalData = () => {
     setExpenses(getExpenses());
@@ -129,85 +154,81 @@ export default function App() {
     setMarketTrips(getMarketTrips());
   };
 
-  const handleConnectCloud = async () => {
-    try {
-      setIsConnectingCloud(true);
-      const user = await loginWithGoogle();
-      setFirebaseUser(user);
-      await syncLocalStorageToFirestore(user.uid);
-    } catch (err) {
-      console.error('Erro ao conectar ao banco de dados:', err);
-    } finally {
-      setIsConnectingCloud(false);
-    }
-  };
-
-  const handleSyncNow = async () => {
-    if (!firebaseUser) return;
+  // Força upload de dados deste dispositivo para a nuvem
+  const handleForceSyncToCloud = async () => {
     try {
       setIsSyncing(true);
-      await syncLocalStorageToFirestore(firebaseUser.uid);
+      setSyncFeedback(null);
+      const res = await syncLocalStorageToFirestore();
+      setSyncFeedback(`Sincronizado! ${res.expenses + res.bills + res.incomes + res.priorities + res.trips} itens salvos na nuvem.`);
+      setTimeout(() => setSyncFeedback(null), 4000);
     } catch (err) {
-      console.error('Erro na sincronização manual:', err);
+      console.error('Erro no upload para a nuvem:', err);
+      setSyncFeedback('Erro ao conectar ao banco de dados.');
+      setTimeout(() => setSyncFeedback(null), 4000);
     } finally {
       setIsSyncing(false);
     }
   };
 
-  // Mutadores seguros com sincronização dupla: Firestore na Nuvem + LocalStorage
+  const [showCacheRecovery, setShowCacheRecovery] = useState(false);
+
+  const handleDataRestored = (restoredExpenses: Expense[], restoredBills?: Bill[]) => {
+    if (restoredExpenses && restoredExpenses.length > 0) {
+      setExpenses(restoredExpenses);
+    }
+    if (restoredBills && restoredBills.length > 0) {
+      setBills(restoredBills);
+    }
+    setSyncFeedback('Dados do cache restaurados e sincronizados com a nuvem!');
+    setTimeout(() => setSyncFeedback(null), 4000);
+  };
+
+  // Mutadores com sincronização bidirecional em tempo real:
+  // Salva no Firestore na nuvem E atualiza cache local imediatamente
   const handleUpdateExpenses = (newExpenses: Expense[]) => {
     const prev = expenses;
     setExpenses(newExpenses);
     saveExpenses(newExpenses);
-    if (firebaseUser) {
-      syncExpensesCollection(newExpenses, prev, firebaseUser.uid).catch((err) => {
-        console.error('Erro ao persistir despesas no Firestore:', err);
-      });
-    }
+    syncExpensesCollection(newExpenses, prev).catch((err) => {
+      console.error('Erro ao persistir despesas no Firestore:', err);
+    });
   };
 
   const handleUpdateBills = (newBills: Bill[]) => {
     const prev = bills;
     setBills(newBills);
     saveBills(newBills);
-    if (firebaseUser) {
-      syncBillsCollection(newBills, prev, firebaseUser.uid).catch((err) => {
-        console.error('Erro ao persistir contas no Firestore:', err);
-      });
-    }
+    syncBillsCollection(newBills, prev).catch((err) => {
+      console.error('Erro ao persistir contas no Firestore:', err);
+    });
   };
 
   const handleUpdateIncomes = (newIncomes: Income[]) => {
     const prev = incomes;
     setIncomes(newIncomes);
     saveIncomes(newIncomes);
-    if (firebaseUser) {
-      syncIncomesCollection(newIncomes, prev, firebaseUser.uid).catch((err) => {
-        console.error('Erro ao persistir receitas no Firestore:', err);
-      });
-    }
+    syncIncomesCollection(newIncomes, prev).catch((err) => {
+      console.error('Erro ao persistir receitas no Firestore:', err);
+    });
   };
 
   const handleUpdatePriorities = (newPriorities: MarketPriorityItem[]) => {
     const prev = marketPriorities;
     setMarketPriorities(newPriorities);
     saveMarketPriorities(newPriorities);
-    if (firebaseUser) {
-      syncPrioritiesCollection(newPriorities, prev, firebaseUser.uid).catch((err) => {
-        console.error('Erro ao persistir prioridades no Firestore:', err);
-      });
-    }
+    syncPrioritiesCollection(newPriorities, prev).catch((err) => {
+      console.error('Erro ao persistir prioridades no Firestore:', err);
+    });
   };
 
   const handleUpdateTrips = (newTrips: MarketTrip[]) => {
     const prev = marketTrips;
     setMarketTrips(newTrips);
     saveMarketTrips(newTrips);
-    if (firebaseUser) {
-      syncTripsCollection(newTrips, prev, firebaseUser.uid).catch((err) => {
-        console.error('Erro ao persistir compras no Firestore:', err);
-      });
-    }
+    syncTripsCollection(newTrips, prev).catch((err) => {
+      console.error('Erro ao persistir compras no Firestore:', err);
+    });
   };
 
   const handleLoginSuccess = (user: UserName) => {
@@ -227,9 +248,23 @@ export default function App() {
     setStoredUser(newUser);
   };
 
-  const handleResetData = () => {
-    clearAllData();
-    loadAllLocalData();
+  const handleResetData = async () => {
+    try {
+      setIsSyncing(true);
+      clearAllData();
+      await clearAllFirestoreDocs();
+      setExpenses([]);
+      setBills([]);
+      setIncomes([]);
+      setMarketPriorities([]);
+      setMarketTrips([]);
+      setSyncFeedback('Todas as contas foram apagadas do app e da nuvem!');
+      setTimeout(() => setSyncFeedback(null), 4000);
+    } catch (err) {
+      console.error('Erro ao resetar dados:', err);
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const handleNavigateToFinancial = (subTab?: 'summary' | 'incomes' | 'expenses' | 'bills') => {
@@ -263,19 +298,17 @@ export default function App() {
     return (
       <div className="min-h-screen bg-[#0a0d14] flex items-center justify-center text-slate-400 text-xs">
         <Loader2 className="w-5 h-5 text-emerald-400 animate-spin mr-2" />
-        Carregando Souza Gestão e Banco de Dados...
+        Carregando Souza Gestão e Banco de Dados na Nuvem...
       </div>
     );
   }
 
-  // Se não estiver logado, exibe tela de login fixo (Mafran / Naiely) com status do Banco
+  // Se não estiver logado, exibe tela de login fixo (Mafran / Naiely)
   if (!currentUser) {
     return (
       <LoginScreen
         onLoginSuccess={handleLoginSuccess}
-        firebaseUser={firebaseUser}
-        onConnectCloud={handleConnectCloud}
-        isConnectingCloud={isConnectingCloud}
+        isCloudConnected={isCloudConnected}
       />
     );
   }
@@ -291,19 +324,18 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#0a0d14] text-slate-100 flex flex-col">
-      {/* Top Bar Fixa com Identificação do Usuário e Status do Banco Firestore */}
+      {/* Top Bar Fixa com Identificação do Usuário e Status do Banco na Nuvem */}
       <TopBar
         currentUser={currentUser}
         onSwitchUser={handleSwitchUser}
         onLogout={handleLogout}
         onResetData={handleResetData}
-        firebaseUser={firebaseUser}
-        onConnectCloud={handleConnectCloud}
-        onSyncNow={handleSyncNow}
+        isCloudConnected={isCloudConnected}
+        onForceSyncToCloud={handleForceSyncToCloud}
+        onOpenCacheRecovery={() => setShowCacheRecovery(true)}
         isSyncing={isSyncing}
+        syncFeedback={syncFeedback}
       />
-
-
 
       {/* Main Container */}
       <main className="flex-1 max-w-md w-full mx-auto px-4 pt-4 pb-20">
@@ -358,6 +390,13 @@ export default function App() {
         activeTab={activeNavTab}
         onChangeTab={handleBottomNavChange}
         pendingBillsCount={pendingBillsCount}
+      />
+
+      {/* Modal de Recuperação de Cache do Aparelho */}
+      <CacheRecoveryModal
+        isOpen={showCacheRecovery}
+        onClose={() => setShowCacheRecovery(false)}
+        onDataRestored={handleDataRestored}
       />
     </div>
   );

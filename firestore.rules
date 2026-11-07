@@ -9,18 +9,6 @@ service cloud.firestore {
     }
 
     // Helper functions
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    function isVerified() {
-      return isSignedIn() && request.auth.token.email_verified == true;
-    }
-
-    function isOwner(ownerUid) {
-      return isSignedIn() && request.auth.uid == ownerUid;
-    }
-
     function isValidId(id) {
       return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
@@ -35,36 +23,36 @@ service cloud.firestore {
 
     // Connectivity test route
     match /test/{testId} {
-      allow get: if true;
+      allow read, write: if true;
     }
 
     // Validation for Incomes
     function isValidIncome(data) {
-      return data.keys().hasAll(['id', 'description', 'amount', 'date', 'userId', 'createdAt', 'ownerUid']) &&
-        data.keys().hasOnly(['id', 'description', 'amount', 'date', 'userId', 'category', 'receiptImage', 'createdAt', 'ownerUid']) &&
+      return data.keys().hasAll(['id', 'description', 'amount', 'date', 'userId', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'description', 'amount', 'date', 'userId', 'category', 'receiptImage', 'createdAt', 'ownerUid', 'familyId']) &&
         data.id is string && data.id.size() <= 128 &&
         data.description is string && data.description.size() <= 100 &&
         data.amount is number &&
         data.date is string && data.date.size() <= 10 &&
         (data.userId == 'Mafran' || data.userId == 'Naiely') &&
         data.createdAt is number &&
-        data.ownerUid is string && data.ownerUid == request.auth.uid &&
         (!('category' in data) || (data.category is string && data.category.size() <= 50)) &&
-        (!('receiptImage' in data) || (data.receiptImage is string && data.receiptImage.size() <= 500000));
+        (!('receiptImage' in data) || (data.receiptImage is string && data.receiptImage.size() <= 500000)) &&
+        (!('ownerUid' in data) || (data.ownerUid is string && data.ownerUid.size() <= 128)) &&
+        (!('familyId' in data) || (data.familyId is string && data.familyId.size() <= 50));
     }
 
     match /incomes/{incomeId} {
-      allow get: if isOwner(resource.data.ownerUid);
-      allow list: if isSignedIn() && resource.data.ownerUid == request.auth.uid;
-      allow create: if isVerified() && isValidId(incomeId) && isValidIncome(incoming()) && incoming().id == incomeId;
-      allow update: if isVerified() && isValidId(incomeId) && isOwner(existing().ownerUid) && incoming().ownerUid == existing().ownerUid && incoming().id == existing().id && isValidIncome(incoming());
-      allow delete: if isVerified() && isValidId(incomeId) && isOwner(existing().ownerUid);
+      allow read: if true;
+      allow create: if isValidId(incomeId) && isValidIncome(incoming()) && incoming().id == incomeId;
+      allow update: if isValidId(incomeId) && incoming().id == existing().id && isValidIncome(incoming());
+      allow delete: if isValidId(incomeId);
     }
 
     // Validation for Expenses
     function isValidExpense(data) {
-      return data.keys().hasAll(['id', 'description', 'amount', 'date', 'userId', 'category', 'type', 'paymentMethod', 'createdAt', 'ownerUid']) &&
-        data.keys().hasOnly(['id', 'description', 'amount', 'date', 'userId', 'category', 'type', 'paymentMethod', 'dueDay', 'durationMonths', 'fixedEndDate', 'barcodeOrPix', 'isNextMonthInvoice', 'createdAt', 'ownerUid']) &&
+      return data.keys().hasAll(['id', 'description', 'amount', 'date', 'userId', 'category', 'type', 'paymentMethod', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'description', 'amount', 'date', 'userId', 'category', 'type', 'paymentMethod', 'dueDay', 'durationMonths', 'fixedEndDate', 'barcodeOrPix', 'isNextMonthInvoice', 'createdAt', 'ownerUid', 'familyId']) &&
         data.id is string && data.id.size() <= 128 &&
         data.description is string && data.description.size() <= 100 &&
         data.amount is number &&
@@ -74,33 +62,32 @@ service cloud.firestore {
         (data.type == 'Fixo' || data.type == 'Variável') &&
         (data.paymentMethod == 'Pix' || data.paymentMethod == 'Dinheiro' || data.paymentMethod == 'Débito' || data.paymentMethod == 'Crédito') &&
         data.createdAt is number &&
-        data.ownerUid is string && data.ownerUid == request.auth.uid &&
         (!('dueDay' in data) || data.dueDay is number) &&
         (!('durationMonths' in data) || (data.durationMonths is string && data.durationMonths.size() <= 20) || data.durationMonths is number) &&
         (!('fixedEndDate' in data) || (data.fixedEndDate is string && data.fixedEndDate.size() <= 10)) &&
         (!('barcodeOrPix' in data) || (data.barcodeOrPix is string && data.barcodeOrPix.size() <= 300)) &&
-        (!('isNextMonthInvoice' in data) || data.isNextMonthInvoice is bool);
+        (!('isNextMonthInvoice' in data) || data.isNextMonthInvoice is bool) &&
+        (!('ownerUid' in data) || (data.ownerUid is string && data.ownerUid.size() <= 128)) &&
+        (!('familyId' in data) || (data.familyId is string && data.familyId.size() <= 50));
     }
 
     match /expenses/{expenseId} {
-      allow get: if isOwner(resource.data.ownerUid);
-      allow list: if isSignedIn() && resource.data.ownerUid == request.auth.uid;
-      allow create: if isVerified() && isValidId(expenseId) && isValidExpense(incoming()) && incoming().id == expenseId;
-      allow update: if isVerified() && isValidId(expenseId) && isOwner(existing().ownerUid) && incoming().ownerUid == existing().ownerUid && incoming().id == existing().id && isValidExpense(incoming());
-      allow delete: if isVerified() && isValidId(expenseId) && isOwner(existing().ownerUid);
+      allow read: if true;
+      allow create: if isValidId(expenseId) && isValidExpense(incoming()) && incoming().id == expenseId;
+      allow update: if isValidId(expenseId) && incoming().id == existing().id && isValidExpense(incoming());
+      allow delete: if isValidId(expenseId);
     }
 
     // Validation for Bills
     function isValidBill(data) {
-      return data.keys().hasAll(['id', 'name', 'amount', 'dueDate', 'isPaid', 'category', 'ownerUid']) &&
-        data.keys().hasOnly(['id', 'name', 'amount', 'dueDate', 'barcodeOrPix', 'isPaid', 'paidAt', 'category', 'userId', 'isInstallment', 'installmentCurrent', 'installmentTotal', 'installmentAmount', 'originalInstallmentId', 'createdAt', 'ownerUid']) &&
+      return data.keys().hasAll(['id', 'name', 'amount', 'dueDate', 'isPaid', 'category']) &&
+        data.keys().hasOnly(['id', 'name', 'amount', 'dueDate', 'barcodeOrPix', 'isPaid', 'paidAt', 'category', 'userId', 'isInstallment', 'installmentCurrent', 'installmentTotal', 'installmentAmount', 'originalInstallmentId', 'createdAt', 'ownerUid', 'familyId']) &&
         data.id is string && data.id.size() <= 128 &&
         data.name is string && data.name.size() <= 100 &&
         data.amount is number &&
         data.dueDate is string && data.dueDate.size() <= 10 &&
         data.isPaid is bool &&
         (data.category == 'Família' || data.category == 'Individual') &&
-        data.ownerUid is string && data.ownerUid == request.auth.uid &&
         (!('paidAt' in data) || (data.paidAt is string && data.paidAt.size() <= 30)) &&
         (!('userId' in data) || (data.userId == 'Mafran' || data.userId == 'Naiely')) &&
         (!('barcodeOrPix' in data) || (data.barcodeOrPix is string && data.barcodeOrPix.size() <= 300)) &&
@@ -109,45 +96,46 @@ service cloud.firestore {
         (!('installmentTotal' in data) || data.installmentTotal is number) &&
         (!('installmentAmount' in data) || data.installmentAmount is number) &&
         (!('originalInstallmentId' in data) || (data.originalInstallmentId is string && data.originalInstallmentId.size() <= 128)) &&
-        (!('createdAt' in data) || data.createdAt is number);
+        (!('createdAt' in data) || data.createdAt is number) &&
+        (!('ownerUid' in data) || (data.ownerUid is string && data.ownerUid.size() <= 128)) &&
+        (!('familyId' in data) || (data.familyId is string && data.familyId.size() <= 50));
     }
 
     match /bills/{billId} {
-      allow get: if isOwner(resource.data.ownerUid);
-      allow list: if isSignedIn() && resource.data.ownerUid == request.auth.uid;
-      allow create: if isVerified() && isValidId(billId) && isValidBill(incoming()) && incoming().id == billId;
-      allow update: if isVerified() && isValidId(billId) && isOwner(existing().ownerUid) && incoming().ownerUid == existing().ownerUid && incoming().id == existing().id && isValidBill(incoming());
-      allow delete: if isVerified() && isValidId(billId) && isOwner(existing().ownerUid);
+      allow read: if true;
+      allow create: if isValidId(billId) && isValidBill(incoming()) && incoming().id == billId;
+      allow update: if isValidId(billId) && incoming().id == existing().id && isValidBill(incoming());
+      allow delete: if isValidId(billId);
     }
 
     // Validation for Market Priorities
     function isValidPriority(data) {
-      return data.keys().hasAll(['id', 'name', 'category', 'isCompleted', 'addedBy', 'month', 'ownerUid']) &&
-        data.keys().hasOnly(['id', 'name', 'category', 'quantity', 'isCompleted', 'estimatedPrice', 'addedBy', 'month', 'createdAt', 'ownerUid']) &&
+      return data.keys().hasAll(['id', 'name', 'category', 'isCompleted', 'addedBy', 'month']) &&
+        data.keys().hasOnly(['id', 'name', 'category', 'quantity', 'isCompleted', 'estimatedPrice', 'addedBy', 'month', 'createdAt', 'ownerUid', 'familyId']) &&
         data.id is string && data.id.size() <= 128 &&
         data.name is string && data.name.size() <= 100 &&
         data.category is string && data.category.size() <= 50 &&
         data.isCompleted is bool &&
         (data.addedBy == 'Mafran' || data.addedBy == 'Naiely') &&
         data.month is string && data.month.size() <= 7 &&
-        data.ownerUid is string && data.ownerUid == request.auth.uid &&
         (!('quantity' in data) || (data.quantity is string && data.quantity.size() <= 30)) &&
         (!('estimatedPrice' in data) || data.estimatedPrice is number) &&
-        (!('createdAt' in data) || data.createdAt is number);
+        (!('createdAt' in data) || data.createdAt is number) &&
+        (!('ownerUid' in data) || (data.ownerUid is string && data.ownerUid.size() <= 128)) &&
+        (!('familyId' in data) || (data.familyId is string && data.familyId.size() <= 50));
     }
 
     match /marketPriorities/{priorityId} {
-      allow get: if isOwner(resource.data.ownerUid);
-      allow list: if isSignedIn() && resource.data.ownerUid == request.auth.uid;
-      allow create: if isVerified() && isValidId(priorityId) && isValidPriority(incoming()) && incoming().id == priorityId;
-      allow update: if isVerified() && isValidId(priorityId) && isOwner(existing().ownerUid) && incoming().ownerUid == existing().ownerUid && incoming().id == existing().id && isValidPriority(incoming());
-      allow delete: if isVerified() && isValidId(priorityId) && isOwner(existing().ownerUid);
+      allow read: if true;
+      allow create: if isValidId(priorityId) && isValidPriority(incoming()) && incoming().id == priorityId;
+      allow update: if isValidId(priorityId) && incoming().id == existing().id && isValidPriority(incoming());
+      allow delete: if isValidId(priorityId);
     }
 
     // Validation for Market Trips
     function isValidTrip(data) {
-      return data.keys().hasAll(['id', 'date', 'month', 'supermarketName', 'totalAmount', 'items', 'createdAt', 'ownerUid']) &&
-        data.keys().hasOnly(['id', 'date', 'month', 'supermarketName', 'totalAmount', 'items', 'notes', 'syncedToFinance', 'createdAt', 'ownerUid']) &&
+      return data.keys().hasAll(['id', 'date', 'month', 'supermarketName', 'totalAmount', 'items', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'date', 'month', 'supermarketName', 'totalAmount', 'items', 'notes', 'syncedToFinance', 'createdAt', 'ownerUid', 'familyId']) &&
         data.id is string && data.id.size() <= 128 &&
         data.date is string && data.date.size() <= 10 &&
         data.month is string && data.month.size() <= 7 &&
@@ -155,17 +143,17 @@ service cloud.firestore {
         data.totalAmount is number &&
         data.items is list && data.items.size() <= 200 &&
         data.createdAt is number &&
-        data.ownerUid is string && data.ownerUid == request.auth.uid &&
         (!('notes' in data) || (data.notes is string && data.notes.size() <= 500)) &&
-        (!('syncedToFinance' in data) || data.syncedToFinance is bool);
+        (!('syncedToFinance' in data) || data.syncedToFinance is bool) &&
+        (!('ownerUid' in data) || (data.ownerUid is string && data.ownerUid.size() <= 128)) &&
+        (!('familyId' in data) || (data.familyId is string && data.familyId.size() <= 50));
     }
 
     match /marketTrips/{tripId} {
-      allow get: if isOwner(resource.data.ownerUid);
-      allow list: if isSignedIn() && resource.data.ownerUid == request.auth.uid;
-      allow create: if isVerified() && isValidId(tripId) && isValidTrip(incoming()) && incoming().id == tripId;
-      allow update: if isVerified() && isValidId(tripId) && isOwner(existing().ownerUid) && incoming().ownerUid == existing().ownerUid && incoming().id == existing().id && isValidTrip(incoming());
-      allow delete: if isVerified() && isValidId(tripId) && isOwner(existing().ownerUid);
+      allow read: if true;
+      allow create: if isValidId(tripId) && isValidTrip(incoming()) && incoming().id == tripId;
+      allow update: if isValidId(tripId) && incoming().id == existing().id && isValidTrip(incoming());
+      allow delete: if isValidId(tripId);
     }
 
   }
